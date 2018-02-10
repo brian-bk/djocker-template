@@ -1,0 +1,47 @@
+version: '3'
+
+services:
+  broker:
+    image: rabbitmq
+  db:
+    image: postgres
+  migration:
+    build: .
+    command: [
+      "/wait-for-it.sh", "db:5432", "--",
+      "python3", "manage.py", "migrate", "--noinput"
+    ]
+    # Use secret.env for local development only
+    env_file:
+      - secret.env
+  worker:
+    build: .
+    command: [
+      "/wait-for-it.sh", "broker:5672", "--",
+      "celery", "worker", "--app", "{{ project_name }}.celery"
+    ]
+    # Use secret.env for local development only
+    env_file:
+      - secret.env
+      - celery.env
+    # Mount volume for local development only
+    volumes:
+      - ./app:/app
+  web:
+    build: .
+    command: [
+      "/wait-for-it.sh", "db:5432", "--",
+      "/wait-for-it.sh", "broker:5672", "--",
+      "python3", "manage.py", "runserver", "0.0.0.0:8000"
+    ]
+    # Use secret.env for local development only
+    env_file:
+      - secret.env
+      - celery.env
+    environment:
+      - DEBUG=1
+    # Mount volume for local development only
+    volumes:
+      - ./app:/app
+    ports:
+      - "8000:8000"
